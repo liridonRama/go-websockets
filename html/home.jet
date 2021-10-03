@@ -41,28 +41,94 @@
             <input type="text" name="message" id="message" class="form-control" autocomplete="off" />
           </div>
 
-          <input type="hidden" name="action" id="action" />
           <hr />
-          <div id="ouput" class="chatbox"></div>
+          <a href="javascript:void(0)" class="btn btn-outline-secondary" onclick="sendMessage()" id="submit"
+            >Send Message</a
+          >
+
+          <input type="hidden" name="action" id="action" />
+          <div class="mt-2 float-end" id="status"></div>
+
+          <div id="output" class="chatbox"></div>
         </div>
         <div class="col-md-4">
           <h3>Who is online</h3>
+          <ul id="userList"></ul>
         </div>
       </div>
     </div>
 
     <script>
-      console.log('hi');
       let socket = null;
+
+      window.onbeforeunload = () => {
+        console.log('leaving');
+
+        socket.send(JSON.stringify({ action: 'left' }));
+      };
 
       document.addEventListener('DOMContentLoaded', function () {
         socket = new WebSocket('ws://127.0.0.1:8080/ws');
-        socket.onopen = () => console.log('Successfully connected');
-        socket.onclose = () => console.log('connection closed');
+
+        const offline = '<span class="badge bg-danger">Offline</span>';
+        const online = '<span class="badge bg-success">Online</span>';
+        const statusDiv = document.querySelector('#status');
+
+        socket.onopen = () => statusDiv.innerHTML = online;
+        socket.onclose = () => statusDiv.innerHTML = offline;
         socket.onerror = (err) => console.log('there was an error', err);
 
-        socket.onmessage = (msg) => console.log(msg);
+        socket.onmessage = (msg) => {
+          let data = JSON.parse(msg.data);
+
+          switch (data.action) {
+            case 'listUsers': {
+              const ulEl = document.querySelector('#userList');
+              ulEl.innerHTML = '';
+
+              for (let user of data.connectedUsers) {
+                console.log(user);
+                const li = document.createElement('li');
+                li.innerText = user;
+                ulEl.appendChild(li);
+              }
+              break;
+            }
+            case 'broadcast': {
+              const el = document.querySelector('#output');
+              el.innerHTML = el.innerHTML + '<br>' + data.message;
+
+              break;
+            }
+          }
+        };
+
+        document.getElementById('username').addEventListener('change', function () {
+          socket.send(JSON.stringify({ action: 'username', username: this.value }));
+        });
+
+        document.querySelector('#message').addEventListener('keydown', (event) => {
+          if (event.code === 'Enter' && !!socket) {
+            event.preventDefault();
+            event.stopPropagation();
+            sendMessage();
+          }
+        });
       });
+
+      const sendMessage = () => {
+        const messageControl = document.querySelector('#message');
+
+        socket.send(
+          JSON.stringify({
+            action: 'broadcast',
+            username: document.querySelector('#username').value,
+            message: messageControl.value,
+          }),
+        );
+
+        messageControl.value = '';
+      };
     </script>
     <!-- JavaScript Bundle with Popper -->
     <script
